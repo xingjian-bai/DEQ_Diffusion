@@ -84,5 +84,6 @@ class DEQFixedPointSolver(nn.Module):
             return selfmade_grad
         
         # register hook so grad contains Jacobian vector product
-        solution.register_hook(backward_hook)
+        if solution.requires_grad:
+            solution.register_hook(backward_hook)
         return solution

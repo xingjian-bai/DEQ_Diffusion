@@ -79,3 +79,11 @@ class Scheduler:
 
 
 # %%
+def LinearScheduler():
+    return Scheduler("linear")
+def CosineScheduler():
+    return Scheduler("cosine")
+def QuadraticScheduler():
+    return Scheduler("quadratic")
+def SigmoidScheduler():
+    return Scheduler("sigmoid")
