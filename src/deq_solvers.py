@@ -30,7 +30,9 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=50, tol=1e-2, beta = 1.0):
         F[:,k%m] = f(X[:,k%m].view_as(x0)).view(bsz, -1)
         res.append((F[:,k%m] - X[:,k%m]).norm().item()/(1e-5 + F[:,k%m].norm().item()))
         if (res[-1] < tol):
+            # print('break at iter', k)
             break
+    # print(f'break in the end max_iter={max_iter}')
     return X[:,k%m].view_as(x0), res
 
 #%%
