@@ -13,7 +13,7 @@ import math
 
 class ResNetLayer(nn.Module):
     """ResNet layer with GroupNorm and ReLU activation"""
-    def __init__(self, n_channels, n_inner_channels, kernel_size=3, num_groups=8):
+    def __init__(self, n_channels, n_inner_channels, kernel_size=2, num_groups=8):
         """
         Args:
             n_channels: number of input channels

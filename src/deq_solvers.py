@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.autograd as autograd
 
 def anderson(f, x0, m=5, lam=1e-4, max_iter=50, tol=1e-2, beta = 1.0):
     """ Anderson acceleration for fixed point iteration. """
@@ -43,3 +44,43 @@ def forward_iteration(f, x0, max_iter=50, tol=1e-2):
         if (res[-1] < tol):
             break
     return f0, res
+
+#%%
+class Solver:
+    def __init__(self, solver_type):
+        if solver_type == 'anderson':
+            self.iter = anderson
+        elif solver_type == 'forward_iteration':
+            self.iter = forward_iteration
+        else:
+            raise NotImplementedError()
+    def __call__(self, *args, **kwargs):
+        return self.iter(*args, **kwargs)
+    
+
+class DEQFixedPointSolver(nn.Module):
+    def __init__(self, f, solver, **kwargs):
+        super().__init__()
+        self.f = f
+        self.solver = solver
+        self.kwargs = kwargs
+        
+    def forward(self, x0):
+        # compute forward pass and re-engage autograd tape
+        with torch.no_grad():
+            # compute fixed point
+            solution, self.forward_residue = self.solver(lambda z : self.f(z, x0), torch.zeros_like(x0), **self.kwargs)
+        solution = self.f(solution, x0)
+        
+        # set up Jacobian vector product (without additional forward calls)
+        solution_grad = solution.clone().detach().requires_grad_()
+        f_grad = self.f(solution_grad, x0)
+        def backward_hook(grad):
+            # compute Jacobian vector product with autograd tape
+            selfmade_grad, self.backward_res = self.solver(lambda y : autograd.grad(f_grad, solution_grad, y, retain_graph=True)[0] + grad,
+                                               grad, **self.kwargs)
+            return selfmade_grad
+        
+        # register hook so grad contains Jacobian vector product
+        solution.register_hook(backward_hook)
+        return solution
