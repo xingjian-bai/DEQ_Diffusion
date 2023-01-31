@@ -1,0 +1,27 @@
+defaults:
+  - _self_
+  - dataset: fasion_mnist
+  - model: unet
+
+# wandb parameters 
+# FIXME
+# currently not used 
+wandb:
+  project: 'DEQ_Diffusion'
+
+device: 'cuda'
+seed: null
+
+optimizer:
+  type: Adam
+  _target_: torch.optim.Adam
+  lr: 0.00
+
+training:
+  epochs: 10
+  eval_interval: 1
+  loss: "huber"
+  
+scheduler:
+  type: 'cosine'
+  timesteps: 200

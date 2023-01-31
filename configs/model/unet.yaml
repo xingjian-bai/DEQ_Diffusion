@@ -1,0 +1,9 @@
+type: "UNet"
+dim_mults: [1, 2, 4]
+
+use_convnext: true
+convnext_mult: 2
+with_time_emb: true
+init_dim: None
+out_dim: None
+resnet_block_groups: 8

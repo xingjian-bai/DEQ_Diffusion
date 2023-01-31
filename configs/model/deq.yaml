@@ -1,0 +1,6 @@
+defaults:
+  - core: resnet
+
+
+type: "DEQ"
+  

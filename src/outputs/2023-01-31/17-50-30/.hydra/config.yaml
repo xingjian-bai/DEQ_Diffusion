@@ -1,0 +1,22 @@
+wandb:
+  project: DEQ_Diffusion
+device: cuda
+seed: null
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.001
+training:
+  epochs: 10
+  eval_interval: 1
+  loss: huber
+scheduler:
+  type: cosine
+  timesteps: 200
+dataset:
+  name: FasionMNIST
+  img_size: 28
+  n_channels: 1
+  batch_size;: 128
+model:
+  type: UNet
+  dim_mults: (1, 2, 4, )

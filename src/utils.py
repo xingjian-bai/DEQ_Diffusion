@@ -12,10 +12,12 @@ import torch.nn.functional as F
 # %%
 def exists(x):
     """Check if x is not None"""
-    return x is not None
+    # print(f'stupid comparison: x, {x is not None} and {x != "None"}')
+    return x is not None and x != 'None'
 
 def default(val, d):
     """Return val if it exists, otherwise return d"""
+    # print(f'checking if {val} exists, with type {type(val)} and the result is {exists(val)}')
     if exists(val):
         return val
     return d() if isfunction(d) else d

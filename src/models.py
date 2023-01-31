@@ -19,38 +19,43 @@ class Unet(nn.Module):
     """
     def __init__(
         self,
-        img_size,
-        channels,
-        init_dim=None,
-        out_dim=None,
-        dim_mults=(1, 2, 4, 8),
-        with_time_emb=True,
-        resnet_block_groups=8,
-        use_convnext=True,
-        convnext_mult=2,
+        cfg
+        # img_size,
+        # channels,
+        # init_dim=None,
+        # out_dim=None,
+        # dim_mults=(1, 2, 4, 8),
+        # with_time_emb=True,
+        # resnet_block_groups=8,
+        # use_convnext=True,
+        # convnext_mult=2,
     ):
         super().__init__()
+        self.img_size = cfg.dataset.img_size
+        self.n_channels = cfg.dataset.n_channels
+        self.batch_size = cfg.dataset.batch_size
+        self.cfg = cfg['model']
+        self.cfg.dim_mults = tuple(self.cfg.dim_mults)
 
-        # determine dimensions
-        self.channels = channels
+        self.cfg.init_dim = default(self.cfg.init_dim, self.img_size // 3 * 2)
+        # print('what is ? ', self.cfg.init_dim, 'because', self.img_size // 3 * 2)
+        self.init_conv = nn.Conv2d(self.n_channels, self.cfg.init_dim, 7, padding=3)
 
-        init_dim = default(init_dim, img_size // 3 * 2)
-        self.init_conv = nn.Conv2d(channels, init_dim, 7, padding=3)
-
-        dims = [init_dim, *map(lambda m: img_size * m, dim_mults)]
+        # print('checking ', tuple(self.cfg.dim_mults), type(self.cfg.with_time_emb))
+        dims = [self.cfg.init_dim, *map(lambda m: self.img_size * m, self.cfg.dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
         
-        if use_convnext:
-            block_klass = partial(ConvNextBlock, mult=convnext_mult)
+        if self.cfg.use_convnext:
+            block_klass = partial(ConvNextBlock, mult=self.cfg.convnext_mult)
         else:
-            block_klass = partial(ResnetBlock, groups=resnet_block_groups)
+            block_klass = partial(ResnetBlock, groups=self.cfg.resnet_block_groups)
 
         # time embeddings
-        if with_time_emb:
-            time_dim = img_size * 4
+        if self.cfg.with_time_emb:
+            time_dim = self.img_size * 4
             self.time_mlp = nn.Sequential(
-                SinusoidalPositionEmbeddings(img_size),
-                nn.Linear(img_size, time_dim),
+                SinusoidalPositionEmbeddings(self.img_size),
+                nn.Linear(self.img_size, time_dim),
                 nn.GELU(),
                 nn.Linear(time_dim, time_dim),
             )
@@ -96,9 +101,9 @@ class Unet(nn.Module):
                 )
             )
 
-        out_dim = default(out_dim, channels)
+        self.cfg.out_dim = default(self.cfg.out_dim, self.n_channels)
         self.final_conv = nn.Sequential(
-            block_klass(img_size, img_size), nn.Conv2d(img_size, out_dim, 1)
+            block_klass(self.img_size, self.img_size), nn.Conv2d(self.img_size, self.cfg.out_dim, 1)
         )
 
     def forward(self, x, time):
@@ -138,17 +143,17 @@ class Unet(nn.Module):
 from deq_solvers import FixPointSolver
 from deq_core import DEQCore
 class DEQ (nn.Module):
-    def __init__(self, imgsize, channels, core_type, solver_type, stradegy_type, n_channels = 48, n_inner_channels = 64, kernel_size = 3, num_groups = 8, with_time_emb=True, **kwargs):
+    def __init__(self, cfg, 
+                #  imgsize, channels, core_type, solver_type, stradegy_type, n_channels = 48, n_inner_channels = 64, kernel_size = 3, num_groups = 8, with_time_emb=True, **kwargs
+                 ):
         super().__init__()
+        self.img_size = cfg.dataset.img_size
+        self.n_channels = cfg.dataset.n_channels
+        self.batch_size = cfg.dataset.batch_size
         
-        self.core_type = core_type
-        self.core = DEQCore(core_type)
+        self.core = DEQCore(cfg.model.core)
 
-        self.solver_type = solver_type
-        self.solver = Solver(solver_type)
-
-        self.stradegy_type = stradegy_type
-        self.fixed_point_solver = DEQFixedPointSolver(stradegy_type, solver_type, self.core, **kwargs)
+        self.fixed_point_solver = FixPointSolver(stradegy_type, solver_type, self.core, **kwargs)
         
         self.conv1 = nn.Conv2d(channels, n_channels, kernel_size=3, bias=True, padding=1)
         self.bn1 = nn.BatchNorm2d(n_channels)
@@ -187,21 +192,18 @@ class DEQ (nn.Module):
         # x = self.fc(x)
         return x
     
-    def __str__(self):
-        return self.core_type + '_' + self.solver_type + '_' + self.stradegy_type
-
 class CentralModel(nn.Module):
-    def __init__(self, model_type, **kwargs):
+    def __init__(self, cfg):
         super().__init__()
-        self.model_type = model_type
-        if model_type == 'DEQ':
-            self.model = DEQ(**kwargs)
-        elif model_type == 'UNet':
-            self.model = Unet(**kwargs)
+        self.model_type = cfg.model.type
+        if cfg.model.type == 'UNet':
+            self.model = Unet(cfg)
+        # elif cfg.model.type == 'DEQ':
+        #     self.model = DEQ(cfg)
         else:
             raise NotImplementedError
     def forward(self, x, time):
         return self.model(x, time)
-
+    
     def __str__(self):
-        return self.model_type + '_' + self.model.__str__()
+        return self.model_type
