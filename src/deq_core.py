@@ -1,15 +1,6 @@
 #%%
-import torch
-import torchvision
-import matplotlib.pyplot as plt
 import torch.nn.functional as F
-import numpy as np
-import time
-from torchvision import transforms 
-from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
 from torch import nn
-import math
 
 class ResNetLayer(nn.Module):
     """ResNet layer with GroupNorm and ReLU activation"""
@@ -34,3 +25,15 @@ class ResNetLayer(nn.Module):
         y = self.norm1(F.relu(self.conv1(z)))
         return self.norm3(F.relu(z + self.norm2(x + self.conv2(y))))
     # we will choose n_channels in the above layer to be smaller than n_inner_channels
+
+class DEQCore(nn.Module):
+    """the core of DEQ wrapper"""
+    def __init__(self, core_type):
+        super().__init__()
+        self.core_type = core_type
+        if core_type == 'resnet':
+            self.core = ResNetLayer(48, 64, 3, 8)
+        else:
+            raise NotImplementedError
+    def forward(self, z, x):
+        return self.core(z, x)

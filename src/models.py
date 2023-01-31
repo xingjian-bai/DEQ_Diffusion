@@ -1,252 +1,8 @@
 # %%
-import math
 from functools import partial
-
-from einops import rearrange
-
 import torch
-from torch import nn, einsum
 from utils import *
 
-# %%
-def Upsample(dim):
-    """Upsample by a factor of 2 by a transposed convolution
-    with stride 2 and padding 1"""
-    # ConvTranspose is a convolution and has trainable kernels 
-    # while Upsample is a simple interpolation
-    return nn.ConvTranspose2d(dim, dim, 4, 2, 1)
-
-def Downsample(dim):
-    """Downsample by a factor of 2 by a convolution 
-    with stride 2 and padding 1"""
-    return nn.Conv2d(dim, dim, 4, 2, 1)
-# %%
-class SinusoidalPositionEmbeddings(nn.Module):
-    """Embed time in a sinusoidal fashion"""
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, time):
-        """takes a tensor of shape (batch_size, 1) and
-        returns a tensor of shape (batch_size, dim)"""
-        device = time.device
-        half_dim = self.dim // 2
-        embeddings = math.log(10000) / (half_dim - 1)
-        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
-        embeddings = time[:, None] * embeddings[None, :]
-        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
-        return embeddings
-# %%
-class Block(nn.Module):
-    """A block of the Transformer"""
-    def __init__(self, dim, dim_out, groups = 8):
-        super().__init__()
-        # kernel size 3
-        self.proj = nn.Conv2d(dim, dim_out, 3, padding = 1)
-        # group normalization normalizes each channel independently
-        self.norm = nn.GroupNorm(groups, dim_out)
-        # SiLU is a variant of the ReLU
-        self.act = nn.SiLU()
-
-    def forward(self, x, scale_shift = None):
-        x = self.proj(x)
-        x = self.norm(x)
-
-        if exists(scale_shift):
-            scale, shift = scale_shift
-            x = x * (scale + 1) + shift
-
-        x = self.act(x)
-        return x
-
-class ResnetBlock(nn.Module):
-    """https://arxiv.org/abs/1512.03385
-       A residual block with a convolutional layer in the middle
-       """
-    
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, groups=8):
-        super().__init__()
-        # if time_emb_dim is not None, then we add a MLP for time embedding
-        self.mlp = (
-            nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, dim_out))
-            if exists(time_emb_dim)
-            else None
-        )
-
-        # 3x3 convolutional layer blocks
-        self.block1 = Block(dim, dim_out, groups=groups)
-        self.block2 = Block(dim_out, dim_out, groups=groups)
-
-        # if dim != dim_out, then we add a 1x1 convolutional layer for residual connection
-        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
-
-    def forward(self, x, time_emb=None):
-        h = self.block1(x)
-
-        # if time_emb exists then we put it through the MLP and add it to h
-        if exists(self.mlp) and exists(time_emb):
-            time_emb = self.mlp(time_emb)
-            h = rearrange(time_emb, "b c -> b c 1 1") + h
-
-        h = self.block2(h)
-        return h + self.res_conv(x)
-    
-class ConvNextBlock(nn.Module):
-    """https://arxiv.org/abs/2201.03545
-         A residual block with a convolutional layer in the middle
-    """
-
-    def __init__(self, dim, dim_out, *, time_emb_dim=None, mult=2, norm=True):
-        super().__init__()
-
-        # mlp for time embedding
-        self.mlp = (
-            nn.Sequential(nn.GELU(), nn.Linear(time_emb_dim, dim))
-            if exists(time_emb_dim)
-            else None
-        )
-
-        # 7x7 convolutional layer with groups = dim
-        self.ds_conv = nn.Conv2d(dim, dim, 7, padding=3, groups=dim)
-
-        self.net = nn.Sequential(
-            nn.GroupNorm(1, dim) if norm else nn.Identity(),
-            nn.Conv2d(dim, dim_out * mult, 3, padding=1),
-            nn.GELU(),
-            nn.GroupNorm(1, dim_out * mult),
-            nn.Conv2d(dim_out * mult, dim_out, 3, padding=1),
-        )
-
-        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
-
-    def forward(self, x, time_emb=None):
-        h = self.ds_conv(x)
-
-        if exists(self.mlp) and exists(time_emb):
-            assert exists(time_emb), "time embedding must be passed in"
-            condition = self.mlp(time_emb)
-            h = h + rearrange(condition, "b c -> b c 1 1")
-
-        h = self.net(h)
-        return h + self.res_conv(x)
-# %%
-class Attention(nn.Module):
-    def __init__(self, dim, heads=4, dim_head=32):
-        super().__init__()
-        self.scale = dim_head**-0.5
-        self.heads = heads
-        hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias=False)
-        self.to_out = nn.Conv2d(hidden_dim, dim, 1)
-
-    def forward(self, x):
-        b, c, h, w = x.shape
-        qkv = self.to_qkv(x).chunk(3, dim=1)
-        q, k, v = map(
-            lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), qkv
-        )
-        q = q * self.scale
-
-        sim = einsum("b h d i, b h d j -> b h i j", q, k)
-        sim = sim - sim.amax(dim=-1, keepdim=True).detach()
-        attn = sim.softmax(dim=-1)
-
-        out = einsum("b h i j, b h d j -> b h i d", attn, v)
-        out = rearrange(out, "b h (x y) d -> b (h d) x y", x=h, y=w)
-        return self.to_out(out)
-
-class LinearAttention(nn.Module):
-    def __init__(self, dim, heads=4, dim_head=32):
-        super().__init__()
-        self.scale = dim_head**-0.5
-        self.heads = heads
-        hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias=False)
-
-        self.to_out = nn.Sequential(nn.Conv2d(hidden_dim, dim, 1), 
-                                    nn.GroupNorm(1, dim))
-
-    def forward(self, x):
-        b, c, h, w = x.shape
-        qkv = self.to_qkv(x).chunk(3, dim=1)
-        q, k, v = map(
-            lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), qkv
-        )
-
-        q = q.softmax(dim=-2)
-        k = k.softmax(dim=-1)
-
-        q = q * self.scale
-        context = torch.einsum("b h d n, b h e n -> b h d e", k, v)
-
-        out = torch.einsum("b h d e, b h d n -> b h e n", context, q)
-        out = rearrange(out, "b h c (x y) -> b (h c) x y", h=self.heads, x=h, y=w)
-        return self.to_out(out)
-# %%
-class Attention(nn.Module):
-    def __init__(self, dim, heads=4, dim_head=32):
-        super().__init__()
-        self.scale = dim_head**-0.5
-        self.heads = heads
-        hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias=False)
-        self.to_out = nn.Conv2d(hidden_dim, dim, 1)
-
-    def forward(self, x):
-        b, c, h, w = x.shape
-        qkv = self.to_qkv(x).chunk(3, dim=1)
-        q, k, v = map(
-            lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), qkv
-        )
-        q = q * self.scale
-
-        sim = einsum("b h d i, b h d j -> b h i j", q, k)
-        sim = sim - sim.amax(dim=-1, keepdim=True).detach()
-        attn = sim.softmax(dim=-1)
-
-        out = einsum("b h i j, b h d j -> b h i d", attn, v)
-        out = rearrange(out, "b h (x y) d -> b (h d) x y", x=h, y=w)
-        return self.to_out(out)
-
-class LinearAttention(nn.Module):
-    def __init__(self, dim, heads=4, dim_head=32):
-        super().__init__()
-        self.scale = dim_head**-0.5
-        self.heads = heads
-        hidden_dim = dim_head * heads
-        self.to_qkv = nn.Conv2d(dim, hidden_dim * 3, 1, bias=False)
-
-        self.to_out = nn.Sequential(nn.Conv2d(hidden_dim, dim, 1), 
-                                    nn.GroupNorm(1, dim))
-
-    def forward(self, x):
-        b, c, h, w = x.shape
-        qkv = self.to_qkv(x).chunk(3, dim=1)
-        q, k, v = map(
-            lambda t: rearrange(t, "b (h c) x y -> b h c (x y)", h=self.heads), qkv
-        )
-
-        q = q.softmax(dim=-2)
-        k = k.softmax(dim=-1)
-
-        q = q * self.scale
-        context = torch.einsum("b h d n, b h e n -> b h d e", k, v)
-
-        out = torch.einsum("b h d e, b h d n -> b h e n", context, q)
-        out = rearrange(out, "b h c (x y) -> b (h c) x y", h=self.heads, x=h, y=w)
-        return self.to_out(out)
-# %%
-class PreNorm(nn.Module):
-    """perform group norm before the attention"""
-    def __init__(self, dim, fn):
-        super().__init__()
-        self.fn = fn
-        self.norm = nn.GroupNorm(1, dim)
-
-    def forward(self, x):
-        x = self.norm(x)
-        return self.fn(x)
 # %%
 class Unet(nn.Module):
     """
@@ -263,11 +19,11 @@ class Unet(nn.Module):
     """
     def __init__(
         self,
-        dim,
+        img_size,
+        channels,
         init_dim=None,
         out_dim=None,
         dim_mults=(1, 2, 4, 8),
-        channels=3,
         with_time_emb=True,
         resnet_block_groups=8,
         use_convnext=True,
@@ -278,10 +34,10 @@ class Unet(nn.Module):
         # determine dimensions
         self.channels = channels
 
-        init_dim = default(init_dim, dim // 3 * 2)
+        init_dim = default(init_dim, img_size // 3 * 2)
         self.init_conv = nn.Conv2d(channels, init_dim, 7, padding=3)
 
-        dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
+        dims = [init_dim, *map(lambda m: img_size * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
         
         if use_convnext:
@@ -291,10 +47,10 @@ class Unet(nn.Module):
 
         # time embeddings
         if with_time_emb:
-            time_dim = dim * 4
+            time_dim = img_size * 4
             self.time_mlp = nn.Sequential(
-                SinusoidalPositionEmbeddings(dim),
-                nn.Linear(dim, time_dim),
+                SinusoidalPositionEmbeddings(img_size),
+                nn.Linear(img_size, time_dim),
                 nn.GELU(),
                 nn.Linear(time_dim, time_dim),
             )
@@ -342,7 +98,7 @@ class Unet(nn.Module):
 
         out_dim = default(out_dim, channels)
         self.final_conv = nn.Sequential(
-            block_klass(dim, dim), nn.Conv2d(dim, out_dim, 1)
+            block_klass(img_size, img_size), nn.Conv2d(img_size, out_dim, 1)
         )
 
     def forward(self, x, time):
@@ -375,4 +131,77 @@ class Unet(nn.Module):
             x = upsample(x)
 
         return self.final_conv(x)
+
+    def __str__(self):
+        return ""
 # %%
+from deq_solvers import FixPointSolver
+from deq_core import DEQCore
+class DEQ (nn.Module):
+    def __init__(self, imgsize, channels, core_type, solver_type, stradegy_type, n_channels = 48, n_inner_channels = 64, kernel_size = 3, num_groups = 8, with_time_emb=True, **kwargs):
+        super().__init__()
+        
+        self.core_type = core_type
+        self.core = DEQCore(core_type)
+
+        self.solver_type = solver_type
+        self.solver = Solver(solver_type)
+
+        self.stradegy_type = stradegy_type
+        self.fixed_point_solver = DEQFixedPointSolver(stradegy_type, solver_type, self.core, **kwargs)
+        
+        self.conv1 = nn.Conv2d(channels, n_channels, kernel_size=3, bias=True, padding=1)
+        self.bn1 = nn.BatchNorm2d(n_channels)
+        # self.core = ResNetLayer(n_channels, n_inner_channels, kernel_size, num_groups)
+        # self.solver = Solver(solver_type)
+        # self.fixed_point_solver = DEQFixedPointSolver(self.core, self.solver, **kwargs)
+        self.bn2 = nn.BatchNorm2d(n_channels)
+        self.conv_back = nn.Conv2d(n_channels, channels, kernel_size=3, bias=True, padding=1)
+        self.avgpool = nn.AvgPool2d(8,8)
+
+        if with_time_emb:
+            time_dim = n_channels
+            self.time_mlp = nn.Sequential(
+                SinusoidalPositionEmbeddings(n_channels),
+                nn.Linear(n_channels, time_dim),
+                nn.GELU(),
+                nn.Linear(time_dim, n_channels)
+            )
+        # self.flatten = nn.Flatten()
+        # self.fc = nn.Linear(n_channels*4*4,10)
+    def forward(self, x, time):
+        # time embedding
+        t = self.time_mlp(time) if exists(self.time_mlp) else None
+        x = self.conv1(x)
+        x = self.bn1(x)
+        # add two dimensions to the time embedding
+        t = t[(..., ) + (None, ) * 2]
+        # add time embedding to the input
+        x = x + t
+
+        x = self.fixed_point_solver(x)
+        x = self.bn2(x)
+        x = self.conv_back(x)
+
+        # x = self.flatten(x)
+        # x = self.fc(x)
+        return x
+    
+    def __str__(self):
+        return self.core_type + '_' + self.solver_type + '_' + self.stradegy_type
+
+class CentralModel(nn.Module):
+    def __init__(self, model_type, **kwargs):
+        super().__init__()
+        self.model_type = model_type
+        if model_type == 'DEQ':
+            self.model = DEQ(**kwargs)
+        elif model_type == 'UNet':
+            self.model = Unet(**kwargs)
+        else:
+            raise NotImplementedError
+    def forward(self, x, time):
+        return self.model(x, time)
+
+    def __str__(self):
+        return self.model_type + '_' + self.model.__str__()

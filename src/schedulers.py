@@ -34,6 +34,7 @@ from utils import extract
 class Scheduler:
     def __init__(self, scheduler_type, timesteps = 200):
         self.timesteps = timesteps
+        self.scheduler_type = scheduler_type
 
         # define beta schedule
         if scheduler_type == "cosine":
@@ -76,6 +77,9 @@ class Scheduler:
         return extract(self.sqrt_one_minus_alphas_cumprod, t, x_shape)
     def get_posterior_variance(self, t, x_shape):
         return extract(self.posterior_variance, t, x_shape)
+
+    def __str__(self) -> str:
+        return self.scheduler_type
 
 
 # %%

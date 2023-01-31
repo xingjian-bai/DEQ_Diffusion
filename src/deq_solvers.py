@@ -37,6 +37,7 @@ def anderson(f, x0, m=5, lam=1e-4, max_iter=50, tol=1e-2, beta = 1.0):
 
 #%%
 def forward_iteration(f, x0, max_iter=50, tol=1e-2):
+    """ Naive fixed point iteration."""
     f0 = f(x0)
     res = []
     for k in range(max_iter):
@@ -47,31 +48,18 @@ def forward_iteration(f, x0, max_iter=50, tol=1e-2):
             break
     return f0, res
 
-#%%
-class Solver:
-    def __init__(self, solver_type):
-        if solver_type == 'anderson':
-            self.iter = anderson
-        elif solver_type == 'forward_iteration':
-            self.iter = forward_iteration
-        else:
-            raise NotImplementedError()
-    def __call__(self, *args, **kwargs):
-        return self.iter(*args, **kwargs)
-    
 
-class DEQFixedPointSolver(nn.Module):
-    def __init__(self, f, solver, **kwargs):
+class FixedPointJacobianSolver(nn.Module):
+    def __init__(self, f, **kwargs):
         super().__init__()
         self.f = f
-        self.solver = solver
         self.kwargs = kwargs
         
-    def forward(self, x0):
+    def forward(self, solver, x0):
         # compute forward pass and re-engage autograd tape
         with torch.no_grad():
             # compute fixed point
-            solution, self.forward_residue = self.solver(lambda z : self.f(z, x0), torch.zeros_like(x0), **self.kwargs)
+            solution, self.forward_residue = solver(lambda z : self.f(z, x0), torch.zeros_like(x0), **self.kwargs)
         solution = self.f(solution, x0)
         
         # set up Jacobian vector product (without additional forward calls)
@@ -79,11 +67,100 @@ class DEQFixedPointSolver(nn.Module):
         f_grad = self.f(solution_grad, x0)
         def backward_hook(grad):
             # compute Jacobian vector product with autograd tape
-            selfmade_grad, self.backward_res = self.solver(lambda y : autograd.grad(f_grad, solution_grad, y, retain_graph=True)[0] + grad,
+            selfmade_grad, self.backward_res = solver(lambda y : autograd.grad(f_grad, solution_grad, y, retain_graph=True)[0] + grad,
                                                grad, **self.kwargs)
             return selfmade_grad
         
         # register hook so grad contains Jacobian vector product
-        if solution.requires_grad:
+        if self.training:
             solution.register_hook(backward_hook)
+        return solution
+
+class UnrollingPhantomGradientSolver(nn.Module):
+    def __init__(self, f, **kwargs):
+        super().__init__()
+        self.f = f
+        self.kwargs = kwargs
+
+    def forward(self, solver, x0, k = 5, _lambda = 0.5):
+        with torch.no_grad():
+            # gradient-free iterations
+            h, self.forward_residue = solver(lambda z : self.f(z, x0), torch.zeros_like(x0), **self.kwargs)
+        if self.training:
+            for _ in range (k):
+                # gradient-based iterations
+                h = (1 - _lambda) * h + _lambda * self.f(h, x0)
+        
+class NeumannPhantomGradientSolver(nn.Module):
+    def __init__(self, f, **kwargs):
+        super().__init__()
+        self.f = f
+        self.kwargs = kwargs
+
+    def forward(self, solver, x0, k = 5, _lambda = 0.5):
+        
+        with torch.no_grad():
+            # gradient-free iterations
+            h, self.forward_residue = solver(lambda z : self.f(z, x0), torch.zeros_like(x0), **self.kwargs)
+        def phantom_grad (grad):
+            f = (1 - _lambda) * h + _lambda * self.f(h, x0)
+
+            g_hat = grad
+            for _ in range (k - 1):
+                g_hat = grad + autograd.grad(f, h, g_hat, retain_graph=True)[0]
+            g_out = _lambda * autograd.grad(f, h, g_hat, retain_graph=True)[0]
+            return g_out
+
+        if self.training:
+            h.register_hook(phantom_grad)
+        return h
+
+class JacobianFreeSolver(nn.Module):
+    def __init__(self, f, **kwargs):
+        super().__init__()
+        self.f = f
+        self.kwargs = kwargs
+
+    def forward(self, solver, x0):
+        with torch.no_grad():
+            # gradient-free iterations
+            h, self.forward_residue = solver(lambda z : self.f(z, x0), torch.zeros_like(x0), **self.kwargs)
+        
+        # calc gradient for the last step
+        h = self.f(h, x0)
+        return h
+    
+#%%
+class FixPointSolver(nn.Module):
+    """
+    Wrapper for fixed point solvers' iterative algorithm.
+    and gradient calculation strategy.
+    """
+    def __init__(self, stradegy_type, solver_type, f, **kwargs):
+        super().__init__()
+        self.f = f
+        self.kwargs = kwargs
+        self.solver_type = solver_type
+        self.stradegy_type = stradegy_type
+
+        if solver_type == 'anderson':
+            self.iter = anderson
+        elif solver_type == 'forward_iteration':
+            self.iter = forward_iteration
+        else:
+            raise NotImplementedError()
+        
+        if stradegy_type == 'jacobian_free':
+            self.stradegy = JacobianFreeSolver(f, **kwargs)
+        elif stradegy_type == 'neumann_phantom_gradient':
+            self.stradegy = NeumannPhantomGradientSolver(f, **kwargs)
+        elif stradegy_type == 'unrolling_phantom_gradient':
+            self.stradegy = UnrollingPhantomGradientSolver(f, **kwargs)
+        elif stradegy_type == 'fixed_point_jacobian':
+            self.stradegy = FixedPointJacobianSolver(f, **kwargs)
+        else:
+            raise NotImplementedError()
+
+    def forward(self, x0, **kwargs):
+        solution = self.stradegy(self.iter, x0, **kwargs)
         return solution
