@@ -15,7 +15,7 @@ seed: null
 optimizer:
   type: Adam
   _target_: torch.optim.Adam
-  lr: 0.00
+  lr: 0.001
 
 training:
   epochs: 10
