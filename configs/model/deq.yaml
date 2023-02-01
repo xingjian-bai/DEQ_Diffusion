@@ -1,6 +1,10 @@
 defaults:
   - core: resnet
-
+  - solver: anderson
+  - stradegy: default
 
 type: "DEQ"
-  
+n_channels: 48
+n_inner_channels: 64
+kernel_size: 3
+with_time_emb: true

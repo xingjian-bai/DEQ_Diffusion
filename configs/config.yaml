@@ -3,6 +3,11 @@ defaults:
   - dataset: fasion_mnist
   - model: unet
 
+hydra:
+  job:
+    chdir: false
+  output_subdir: 
+
 # wandb parameters 
 # FIXME
 # currently not used 
@@ -19,7 +24,9 @@ optimizer:
 
 training:
   epochs: 10
-  eval_interval: 1
+  save_every: 1
+  eval_every: 1
+  visualize_every: 1
   loss: "huber"
   
 scheduler:

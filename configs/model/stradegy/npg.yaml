@@ -1,0 +1,3 @@
+type: neumann_phantom_gradient
+k: 5
+_lambda: 0.5

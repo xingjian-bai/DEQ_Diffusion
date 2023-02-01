@@ -1,0 +1,2 @@
+type: resnet
+num_groups: 8

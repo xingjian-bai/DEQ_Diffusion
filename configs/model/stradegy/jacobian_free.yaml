@@ -1,0 +1,3 @@
+type: jacobian_free
+k: 5
+_lambda: 0.5

@@ -1,0 +1,4 @@
+type: forward_iteration
+params:
+  max_iter: 50
+  tol: 0.01

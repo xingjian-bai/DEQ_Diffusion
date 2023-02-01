@@ -1,10 +1,10 @@
 # %%
-from torchvision.transforms import Compose, ToTensor, Lambda, ToPILImage, CenterCrop, Resize
-from datasets import load_dataset
-from torchvision import transforms
-from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import torch
+# from torchvision.transforms import Compose, ToTensor, Lambda, ToPILImage, CenterCrop, Resize
+# from datasets import load_dataset
+# from torchvision import transforms
+# from torch.utils.data import DataLoader
+# import matplotlib.pyplot as plt
+# import torch
 # load dataset from the hub
 # dataset = load_dataset("fashion_mnist")
 # %%
@@ -12,26 +12,18 @@ import torch
 # print('started loading dataset')
 
 # IMPORTANT: current position is in src/output/time/logs
-dataset = torch.load("../../../../data/fashion_mnist.pkl")
-IMAGE_SIZE = 28
-CHANNELS = 1
-BATCH_SIZE = 128
+
+# IMAGE_SIZE = 28
+# CHANNELS = 1
+# BATCH_SIZE = 128
 # %%
-transform = Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Lambda(lambda t: (t * 2) - 1)
-])
-def transforms(examples):
-   examples["pixel_values"] = [transform(image.convert("L")) for image in examples["image"]]
-   del examples["image"]
-   return examples
+
 # print('finished loading dataset')
-transformed_dataset = dataset.with_transform(transforms).remove_columns("label")
+# transformed_dataset = dataset.with_transform(transforms).remove_columns("label")
 # %%
 # # create dataloader
-dataloader = DataLoader(transformed_dataset["train"], batch_size=BATCH_SIZE, shuffle=True)
-test_dataloader = DataLoader(transformed_dataset["test"], batch_size=BATCH_SIZE, shuffle=True)
+# dataloader = DataLoader(transformed_dataset["train"], batch_size=BATCH_SIZE, shuffle=True)
+# test_dataloader = DataLoader(transformed_dataset["test"], batch_size=BATCH_SIZE, shuffle=True)
 # print('finished creating dataloader')
 # %% save the transformed dataset
 # import torch
@@ -53,51 +45,63 @@ from samplers import sample
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import os
+from torchvision.transforms import Compose
+from torchvision import transforms
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+import torch
 
-def make_animation(samples, scheduler, index, name_prefix):
-    fig = plt.figure()
-    ims = []
-    for i in range(scheduler.timesteps):
-        im = plt.imshow(samples[i][index].reshape(IMAGE_SIZE, IMAGE_SIZE, CHANNELS), cmap="gray", animated=True)
-        ims.append([im])
-    animate = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=1000)
-    
-    id = 0
-    while os.path.exists(f'../gifs/{name_prefix}_{id}.gif'):
-        id += 1
-    animate.save(f'../gifs/{name_prefix}_{id}.gif')
+transform = Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda t: (t * 2) - 1)
+])
+def transforms(examples):
+   examples["pixel_values"] = [transform(image.convert("L")) for image in examples["image"]]
+   del examples["image"]
+   return examples
 
-def visualize (model, scheduler, gif_num = 1, side_num = 4, name_prefix = "unnamed"):
-    samples = sample(model, scheduler, image_size=IMAGE_SIZE, batch_size = side_num * side_num, channels=CHANNELS)
-    
-    f, axarr = plt.subplots(side_num, side_num)
-    for i in range(side_num):
-        for j in range(side_num):
-            axarr[i,j].imshow(samples[-1][i * side_num + j].reshape(IMAGE_SIZE, IMAGE_SIZE, CHANNELS), cmap="gray")
-    
-    id = 0
-    while os.path.exists(f'../gifs/{name_prefix}_{id}.gif'):
-        id += 1
-    plt.savefig(f'../gifs/{name_prefix}_{id}.png')
-
-    # bottleneck is here
-    for i in range(gif_num):
-        make_animation(samples, scheduler, i, name_prefix = name_prefix)
 # %%
-from dataset import CleanDataset
-
-class FasionMNISTDataset(CleanDataset):
+# from dataset import CleanDataset
+class FasionMNISTDataset():
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.dataset = torch.load("../data/fashion_mnist.pkl")
+        self.transformed_dataset = self.dataset.with_transform(transforms).remove_columns("label")
+        self.dataloader = DataLoader(self.transformed_dataset["train"], batch_size=cfg.dataset.batch_size, shuffle=True)
+        self.test_dataloader = DataLoader(self.transformed_dataset["test"], batch_size=cfg.dataset.batch_size, shuffle=True)
+    
     def DataLoader(self):
-        return dataloader
+        return self.dataloader
     
     # def Dataset(self):
     #     return transformed_dataset
     
     def TestDataloader(self):
-        return test_dataloader
-    
-    def visualize (self, gif_num = 1, side_num = 4, name_prefix = "unamed"):
-        return visualize (self, gif_num = gif_num, side_num = side_num, name_prefix = name_prefix)
+        return self.test_dataloader
+    def make_animation(self, samples, index, experiment_name):
+        fig = plt.figure()
+        ims = []
+        for i in range(self.cfg.scheduler.timesteps):
+            im = plt.imshow(samples[i][index].reshape(self.cfg.dataset.img_size, self.cfg.dataset.img_size, self.cfg.dataset.n_channels), cmap="gray", animated=True)
+            ims.append([im])
+        animate = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=3000)
+        animate.save(f'../gifs/{experiment_name}.gif')
+
+    def visualize (self, model, scheduler, experiment_name, loss, gif_num = 1, side_num = 4):
+        samples = sample(model, scheduler, image_size=self.cfg.dataset.img_size, batch_size = side_num * side_num, channels=self.cfg.dataset.n_channels)
+        _, axarr = plt.subplots(side_num, side_num)
+        for i in range(side_num):
+            for j in range(side_num):
+                axarr[i,j].imshow(samples[-1][i * side_num + j].reshape(self.cfg.dataset.img_size, self.cfg.dataset.img_size, self.cfg.dataset.n_channels), cmap="gray")
+        
+        plt.suptitle(f'{loss=:.4f}', fontsize = 14)
+        plt.tight_layout()
+        plt.savefig(f'../gifs/{experiment_name}.png')
+
+        # bottleneck is here
+        for i in range(gif_num):
+            self.make_animation(samples, i, experiment_name)
 
 # # %%
 # import numpy as np
