@@ -9,3 +9,7 @@
 /src/.ipynb_checkpoints
 /src/annotated_diffusion.ipynb
 /src/outputs/*
+/src/wandb/*
+/src/multirun/*
+
+/datasets/__pycache__

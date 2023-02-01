@@ -90,30 +90,32 @@ class UnrollingPhantomGradientSolver(nn.Module):
             for _ in range (self.cfg.model.stradegy.k):
                 # gradient-based iterations
                 h = (1 - self.cfg.model.stradegy._lambda) * h + self.cfg.model.stradegy._lambda * self.f(h, x0)
-        
-class NeumannPhantomGradientSolver(nn.Module):
-    def __init__(self, f, cfg):
-        super().__init__()
-        self.f = f
-        self.cfg = cfg
-
-    def forward(self, solver, x0): #, k = 5, _lambda = 0.5):
-        
-        with torch.no_grad():
-            # gradient-free iterations
-            h, self.forward_residue = solver(lambda z : self.f(z, x0), torch.zeros_like(x0), self.cfg["model"]["solver"])
-        def phantom_grad (grad):
-            f = (1 - self.cfg.model.stradegy._lambda) * h + self.cfg.model.stradegy._lambda * self.f(h, x0)
-
-            g_hat = grad
-            for _ in range (self.cfg.stradegy.k - 1):
-                g_hat = grad + autograd.grad(f, h, g_hat, retain_graph=True)[0]
-            g_out = self.cfg.model.stradegy._lambda * autograd.grad(f, h, g_hat, retain_graph=True)[0]
-            return g_out
-
-        if self.training:
-            h.register_hook(phantom_grad)
         return h
+    
+# class NeumannPhantomGradientSolver(nn.Module):
+#     def __init__(self, f, cfg):
+#         super().__init__()
+#         self.f = f
+#         self.cfg = cfg
+
+#     def forward(self, solver, x0): #, k = 5, _lambda = 0.5):
+        
+#         with torch.no_grad():
+#             # gradient-free iterations
+#             h, self.forward_residue = solver(lambda z : self.f(z, x0), torch.zeros_like(x0), self.cfg["model"]["solver"])
+#         def phantom_grad (grad):
+#             f = (1 - self.cfg.model.stradegy._lambda) * h + self.cfg.model.stradegy._lambda * self.f(h, x0)
+
+#             g_hat = grad
+#             for _ in range (self.cfg.model.stradegy.k - 1):
+#                 g_hat = grad + autograd.grad(f, h, g_hat)
+#             g_out = self.cfg.model.stradegy._lambda * autograd.grad(f, h, grad_outputs=g_hat)
+#             return g_out
+
+#         h_grad = h.clone().detach().requires_grad_()
+#         if self.training:
+#             h_grad.register_hook(phantom_grad)
+#         return h_grad
 
 class JacobianFreeSolver(nn.Module):
     def __init__(self, f, cfg):
@@ -152,8 +154,8 @@ class FixPointSolver(nn.Module):
         
         if self.stradegy_type == 'jacobian_free':
             self.stradegy = JacobianFreeSolver(f, cfg)
-        elif self.stradegy_type == 'neumann_phantom_gradient':
-            self.stradegy = NeumannPhantomGradientSolver(f, cfg)
+        # elif self.stradegy_type == 'neumann_phantom_gradient':
+        #     self.stradegy = NeumannPhantomGradientSolver(f, cfg)
         elif self.stradegy_type == 'unrolling_phantom_gradient':
             self.stradegy = UnrollingPhantomGradientSolver(f, cfg)
         elif self.stradegy_type == 'fixed_point_jacobian':

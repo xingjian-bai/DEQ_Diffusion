@@ -1,0 +1,6 @@
+[2023-02-01 03:30:38,573][matplotlib.animation][INFO] - Animation.save using <class 'matplotlib.animation.FFMpegWriter'>
+[2023-02-01 03:30:38,574][matplotlib.animation][INFO] - MovieWriter._run: running command: ffmpeg -f rawvideo -vcodec rawvideo -s 640x480 -pix_fmt rgba -r 20.0 -loglevel error -i pipe: -filter_complex 'split [a][b];[a] palettegen [p];[b][p] paletteuse' -y ../gifs/FasionMNIST_UNet_Adam_sigmoid_huber_0201-0329.gif
+[2023-02-01 03:32:12,253][matplotlib.animation][INFO] - Animation.save using <class 'matplotlib.animation.FFMpegWriter'>
+[2023-02-01 03:32:12,254][matplotlib.animation][INFO] - MovieWriter._run: running command: ffmpeg -f rawvideo -vcodec rawvideo -s 640x480 -pix_fmt rgba -r 20.0 -loglevel error -i pipe: -filter_complex 'split [a][b];[a] palettegen [p];[b][p] paletteuse' -y ../gifs/FasionMNIST_UNet_Adam_sigmoid_huber_0201-0329.gif
+[2023-02-01 03:33:51,583][matplotlib.animation][INFO] - Animation.save using <class 'matplotlib.animation.FFMpegWriter'>
+[2023-02-01 03:33:51,584][matplotlib.animation][INFO] - MovieWriter._run: running command: ffmpeg -f rawvideo -vcodec rawvideo -s 640x480 -pix_fmt rgba -r 20.0 -loglevel error -i pipe: -filter_complex 'split [a][b];[a] palettegen [p];[b][p] paletteuse' -y ../gifs/FasionMNIST_UNet_Adam_sigmoid_huber_0201-0329.gif

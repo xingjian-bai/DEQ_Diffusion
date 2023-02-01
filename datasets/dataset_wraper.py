@@ -15,8 +15,8 @@ class DatasetWraper():
     def TestDataloader(self):
         return self.dataset.TestDataloader()
     
-    def visualize (self, model, scheduler, experiment_name, loss, gif_num = 1, side_num = 4):
-        return self.dataset.visualize(model, scheduler, experiment_name, loss, gif_num = gif_num, side_num = side_num)
+    def visualize (self, model, scheduler, experiment_name, epoch, loss, gif_num = 1, side_num = 4):
+        return self.dataset.visualize(model, scheduler, experiment_name, epoch, loss, gif_num = gif_num, side_num = side_num)
     
     def __str__(self) -> str:
         return self.dataset_name

@@ -9,10 +9,8 @@ hydra:
   output_subdir: 
 
 # wandb parameters 
-# FIXME
-# currently not used 
-wandb:
-  project: 'DEQ_Diffusion'
+# wandb:
+  # project: 'DEQ_Diffusion'
 
 device: 'cuda'
 seed: null
@@ -23,7 +21,7 @@ optimizer:
   lr: 0.001
 
 training:
-  epochs: 10
+  epochs: 20
   save_every: 1
   eval_every: 1
   visualize_every: 1
@@ -32,3 +30,5 @@ training:
 scheduler:
   type: 'cosine'
   timesteps: 200
+
+wandb:

@@ -1,0 +1,2 @@
+python3 experiment.py hydra.mode=MULTIRUN scheduler.type=sigmoid,cosine,linear,quadratic model=deq model/solver=forward,anderson model/stradegy=jacobian_free,upg,default training.loss=huber,l1,l2
+python3 experiment.py hydra.mode=MULTIRUN scheduler.type=sigmoid,cosine,linear,quadratic model=unet training.loss=huber,l1,l2

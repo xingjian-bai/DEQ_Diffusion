@@ -188,6 +188,7 @@ class DEQ (nn.Module):
         x = x + t
 
         x = self.fixed_point_solver(x)
+        # print(f'solved {x.shape} value is {x}')
         x = self.bn2(x)
         x = self.conv_back(x)
 
