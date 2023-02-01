@@ -1,0 +1,5 @@
+name: "MNIST"
+img_size: 28
+n_channels: 1
+batch_size: 128
+address: "../data/mnist.pkl"

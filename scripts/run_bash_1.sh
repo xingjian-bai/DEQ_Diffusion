@@ -3,4 +3,5 @@ python3 experiment.py hydra.mode=MULTIRUN device='cuda:1' training.loss=huber,l1
 
 
 
-python3 experiment.py device='cuda:3' training.loss=huber scheduler.type=sigmoid model=unet 
+python3 experiment.py device='cuda:2' dataset=fasion_mnist training.loss=huber scheduler.type=sigmoid model=deq  
+python3 experiment.py device='cuda:2' dataset=mnist

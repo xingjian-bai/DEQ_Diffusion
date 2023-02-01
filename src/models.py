@@ -196,6 +196,9 @@ class DEQ (nn.Module):
         # x = self.fc(x)
         return x
     
+    def __str__(self):
+        return self.cfg.model.core.type + '_' + self.cfg.model.solver.type + '_' + self.cfg.model.stradegy.type
+    
 class CentralModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -210,4 +213,4 @@ class CentralModel(nn.Module):
         return self.model(x, time)
     
     def __str__(self):
-        return self.model_type
+        return self.model_type + '_' + str(self.model)

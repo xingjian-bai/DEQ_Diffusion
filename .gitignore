@@ -4,6 +4,7 @@
 /data
 /archive
 /__pycache__
+/gifs
 
 /src/__pycache__/*
 /src/.ipynb_checkpoints

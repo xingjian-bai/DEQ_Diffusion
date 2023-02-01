@@ -90,7 +90,7 @@ def main(cfg: DictConfig) -> None:
                project=cfg.wandb.project,
                entity=cfg.wandb.entity,
                notes=cfg.wandb.notes,
-               name=formatted_time+'_'+experiment_name,
+               name=experiment_name,
                job_type=cfg.wandb.job_type,
                reinit=True)
     
