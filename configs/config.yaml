@@ -9,8 +9,12 @@ hydra:
   output_subdir: 
 
 # wandb parameters 
-# wandb:
-  # project: 'DEQ_Diffusion'
+wandb:
+  entity: luke_and_xingjian
+  project: 'DEQ+Diffusion toy experiments'
+  notes: 'one toy experiment'
+  job_type: training
+
 
 device: 'cuda'
 seed: null
@@ -21,7 +25,7 @@ optimizer:
   lr: 0.001
 
 training:
-  epochs: 20
+  epochs: 10
   save_every: 1
   eval_every: 1
   visualize_every: 1
@@ -30,5 +34,3 @@ training:
 scheduler:
   type: 'cosine'
   timesteps: 200
-
-wandb:

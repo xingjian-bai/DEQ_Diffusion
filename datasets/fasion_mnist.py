@@ -87,10 +87,10 @@ class FasionMNISTDataset():
             im = plt.imshow(samples[i][index].reshape(self.cfg.dataset.img_size, self.cfg.dataset.img_size, self.cfg.dataset.n_channels), cmap="gray", animated=True)
             ims.append([im])
         animate = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=3000)
-        animate.save(f'../gifs/{experiment_name}.gif')
-        wandb.log({experiment_name + '_gif': wandb.Video(f'../gifs/{experiment_name}.gif'), 'epoch': epoch})
+        animate.save(f'../gifs/{experiment_name}__ep{epoch}.gif')
+        wandb.log({'gif': wandb.Video(f'../gifs/{experiment_name}__ep{epoch}.gif'), 'epoch': epoch})
 
-    def visualize (self, model, scheduler, experiment_name, epoch, loss, gif_num = 1, side_num = 4):
+    def visualize (self, model, scheduler, experiment_name, epoch, loss, gif_num, side_num):
         samples = sample(model, scheduler, image_size=self.cfg.dataset.img_size, batch_size = side_num * side_num, channels=self.cfg.dataset.n_channels)
         _, axarr = plt.subplots(side_num, side_num)
         for i in range(side_num):
@@ -99,8 +99,8 @@ class FasionMNISTDataset():
         
         plt.suptitle(f'{loss=:.4f}', fontsize = 14)
         plt.tight_layout()
-        plt.savefig(f'../gifs/{experiment_name}.png')
-        wandb.log({experiment_name: wandb.Image(f'../gifs/{experiment_name}.png'), 'epoch': epoch})
+        plt.savefig(f'../gifs/{experiment_name}__ep{epoch}.png')
+        wandb.log({'image': wandb.Image(f'../gifs/{experiment_name}__ep{epoch}.png'), 'epoch': epoch})
 
         # bottleneck is here
         for i in range(gif_num):
