@@ -33,6 +33,7 @@ def sigmoid_beta_schedule(timesteps):
 from utils import extract
 class Scheduler:
     def __init__(self, scheduler_type, timesteps = 200):
+        print(f'in scheduler init, scheduler_type = {scheduler_type},timesteps = {timesteps}')
         self.timesteps = timesteps
         self.scheduler_type = scheduler_type
 
@@ -83,11 +84,11 @@ class Scheduler:
 
 
 # %%
-def LinearScheduler():
-    return Scheduler("linear")
-def CosineScheduler():
-    return Scheduler("cosine")
-def QuadraticScheduler():
-    return Scheduler("quadratic")
-def SigmoidScheduler():
-    return Scheduler("sigmoid")
+# def LinearScheduler():
+#     return Scheduler("linear")
+# def CosineScheduler():
+#     return Scheduler("cosine")
+# def QuadraticScheduler():
+#     return Scheduler("quadratic")
+# def SigmoidScheduler():
+#     return Scheduler("sigmoid")

@@ -15,7 +15,6 @@ from schedulers import Scheduler
 import time
 import wandb
 import json
-import flatdict
 
 
 def evaluate (data, model, scheduler, device):
@@ -27,7 +26,7 @@ def evaluate (data, model, scheduler, device):
         batch_size = batch["pixel_values"].shape[0]
         batch = batch["pixel_values"].to(device)
         t = torch.randint(0, scheduler.timesteps, (batch_size,), device=device).long()
-        loss = p_losses(model, scheduler, batch, t, loss_type="huber")
+        loss = p_losses(model, scheduler, batch, t, loss_type=cfg.training.loss)
         total_loss += [loss.item()]
 
     mean_loss = sum(total_loss) / len(total_loss)
@@ -35,6 +34,7 @@ def evaluate (data, model, scheduler, device):
 
 def train(data, model, optimizer, scheduler, cfg, device, experiment_name):
     model.train()
+    print(f'started training with epochs {cfg.training.epochs}')
     for epoch in range(cfg.training.epochs):
         start_epoch_time = time.time()
         print(f'conducting experiment {experiment_name}')
@@ -74,7 +74,7 @@ def train(data, model, optimizer, scheduler, cfg, device, experiment_name):
 
 @hydra.main(config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    
+    print(f'running with config {cfg}')
     device = cfg.device
     data = DatasetWraper(cfg)
     scheduler = Scheduler(cfg.scheduler.type, timesteps=cfg.scheduler.timesteps)
@@ -83,7 +83,7 @@ def main(cfg: DictConfig) -> None:
     optimizer = optimizer_class(model.parameters(), lr=cfg.optimizer.lr)
 
     formatted_time = time.strftime('%m%d-%H%M')
-    experiment_name = f"{formatted_time}_{cfg.dataset.name}_{model}_{cfg.optimizer.type}_{scheduler}_{cfg.training.loss}"
+    experiment_name = f"{formatted_time}_{cfg.dataset.name}_{model}_{cfg.optimizer.type}_{scheduler}_{cfg.training.loss}__{cfg.training.epochs}eps"
 
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     wandb.init(config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
