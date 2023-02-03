@@ -6,7 +6,7 @@ defaults:
 hydra:
   job:
     chdir: false
-  output_subdir: 
+  # output_subdir: 
 
 # wandb parameters 
 wandb:
